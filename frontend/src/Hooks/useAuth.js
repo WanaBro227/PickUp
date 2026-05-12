@@ -1,4 +1,11 @@
-import { useAuth } from '../Context/AuthContext';
+import { useAuthStore } from '../store/authStore'
 
-const useAuthHook = useAuth;
-export { useAuthHook as useAuth };
+export const useAuth = () => {
+    const store = useAuthStore();
+
+    return {
+        ...store,
+        isAuthenticated: !!store.user,
+        role: store.user?.role
+    };
+};

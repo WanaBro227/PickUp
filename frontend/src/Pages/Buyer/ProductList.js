@@ -1,106 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Grid, List } from 'lucide-react';
-import ProductCard from '../../Components/ProductCard';
-import { mockProducts } from '../../Utils/mockData';
-import Button from '../../Components/Button';
-import { useAuth } from '../../Hooks/useAuth';
-import Footer from '../../Components/Footer';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { api } from '../../Services/api';
+import { useWishlist } from '../../Context/WishlistContext';
+import { useRecent } from '../../Context/RecentlyViewedContext';
+import { Heart } from 'lucide-react'; 
+import { formatLKR } from '../../Utils/formatters';
 
 const ProductList = () => {
-  const { user } = useAuth();
   const [products, setProducts] = useState([]);
-  const [filters, setFilters] = useState({ type: 'all', category: 'all', search: '' });
-  const [view, setView] = useState('grid'); // grid or list
+  const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams(); 
+  const navigate = useNavigate();
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { addToRecent } = useRecent();
+
+  const searchQuery = searchParams.get('search') || '';
+  const selectedCategory = searchParams.get('category') || 'All';
 
   useEffect(() => {
-    // Filter logic (mock API)
-    const filtered = mockProducts.filter(p => {
-      if (filters.type !== 'all' && p.type !== filters.type) return false;
-      if (filters.category !== 'all' && p.category !== filters.category) return false;
-      if (filters.search && !p.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
-      return p.status === 'ACTIVE';
-    });
-    setProducts(filtered);
-  }, [filters]);
-
-  const categories = [...new Set(mockProducts.map(p => p.category))];
+    const loadProducts = async () => {
+      setLoading(true);
+      try {
+        const data = await api.getProducts({ category: selectedCategory, search: searchQuery });
+        setProducts(Array.isArray(data) ? data : []);
+      } catch (error) { 
+        console.error(error);
+        setProducts([]); 
+      } finally { 
+        setLoading(false); 
+      }
+    };
+    loadProducts();
+  }, [searchQuery, selectedCategory]);
 
   return (
-    <div className="min-h-screen bg-[#f6f7f8]">
-      {/* Search & Filters */}
-      <div className="sticky top-[70px] bg-white/80 backdrop-blur-md border-b border-slate-200 z-10 py-4">
-        <div className="max-w-7xl mx-auto px-4 lg:px-20 flex flex-col lg:flex-row gap-4 items-center">
-          <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search products, brands..."
-              className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1c74e9]"
-              value={filters.search}
-              onChange={(e) => setFilters({...filters, search: e.target.value})}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setView(view === 'grid' ? 'list' : 'grid')}>
-              {view === 'grid' ? <List size={18} /> : <Grid size={18} />}
-            </Button>
-            <Filter className="w-5 h-5 text-slate-400" />
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 lg:px-20 py-8">
-        {/* Category Filters */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {['All', ...categories].map(cat => (
-              <Button
-                key={cat}
-                variant={filters.category === cat.toLowerCase() ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => setFilters({...filters, category: cat === 'All' ? 'all' : cat.toLowerCase()})}
-              >
-                {cat}
-              </Button>
-            ))}
-            <Button
-              variant={filters.type === 'all' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilters({...filters, type: 'all'})}
-            >
-              All Types
-            </Button>
-            <Button
-              variant={filters.type === 'FIXED' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilters({...filters, type: 'FIXED'})}
-            >
-              Fixed Price
-            </Button>
-            <Button
-              variant={filters.type === 'AUCTION' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilters({...filters, type: 'AUCTION'})}
-            >
-              Auctions
-            </Button>
-          </div>
+    <div className="min-h-screen bg-slate-50 pb-20 pt-6">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="mb-10 text-center md:text-left">
+          <h1 className="text-3xl font-black text-slate-900">Marketplace</h1>
         </div>
 
-        {/* Products */}
-        <div className={`grid gap-6 ${view === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
-          {products.map(product => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {loading ? (
+            <div className="col-span-full text-center py-10 font-bold text-slate-400">Loading items...</div>
+          ) : products.length > 0 ? (
+            products.map(product => {
+              const isFavorite = isInWishlist(product.id);
+              return (
+                <div 
+                  key={product.id} 
+                  className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-50 relative group cursor-pointer hover:shadow-xl transition-all duration-300" 
+                  onClick={() => {
+                    addToRecent(product);
+                    navigate(`/products/${product.id}`);
+                  }}
+                >
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      isFavorite ? removeFromWishlist(product.id) : addToWishlist(product); 
+                    }}
+                    className="absolute top-6 right-6 z-10 p-2.5 bg-white/90 backdrop-blur-md rounded-xl shadow-sm text-slate-400 hover:text-red-500 transition-all"
+                  >
+                    <Heart size={18} fill={isFavorite ? "#ef4444" : "none"} className={isFavorite ? "text-red-500" : ""} />
+                  </button>
+                  
+                  <img 
+                    src={product.img} 
+                    alt={product.title} 
+                    className="w-full h-64 object-cover rounded-2xl mb-4 group-hover:scale-[1.02] transition-transform" 
+                  />
+                  
+                  <h3 className="font-bold text-slate-800 mb-1 truncate">{product.title}</h3>
+                  <p className="text-blue-600 font-black text-lg">
+                    {formatLKR(product.price || product.currentBid)}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-full text-center py-10 text-slate-400 font-bold">
+              No products found.
+            </div>
+          )}
         </div>
-
-        {products.length === 0 && (
-          <div className="text-center py-20">
-            <Search className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No products found</h3>
-            <p className="text-slate-500">Try adjusting your filters or search terms</p>
-          </div>
-        )}
       </div>
     </div>
   );

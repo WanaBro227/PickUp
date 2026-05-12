@@ -7,26 +7,27 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+
+  const { login, loading, user } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleLogin = async (event) => {
+    event.preventDefault();
     setError('');
 
     const result = await login(email, password);
-    
+
     if (result.success) {
-      if (result.user.role === 'ADMIN') navigate('/admin/dashboard');
-      else if (result.user.role === 'SELLER') navigate('/seller/dashboard');
+      const userRole = result.user?.role;
+
+      if (userRole === 'ADMIN') navigate('/admin/dashboard');
+      else if (userRole === 'SELLER') navigate('/seller/dashboard');
       else navigate('/');
-    } else {
-      setError(result.error);
     }
-    setLoading(false);
-  };
+    else {
+      setError(result.error || 'Invalid email or password. Please try again.');
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8] py-12 px-4 sm:px-6 lg:px-8 font-display">

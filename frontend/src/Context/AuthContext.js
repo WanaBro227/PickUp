@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { mockUsers } from '../Utils/mockData';
+import { api } from '../Services/api';
 
 const AuthContext = createContext();
 
@@ -22,15 +22,26 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = (email, password) => {
-    const foundUser = mockUsers.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      const userData = { ...foundUser };
+  const login = async (email, password) => {
+    const result = await api.login(email, password);
+    if (result.success) {
+      const userData = { ...result.user };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       return { success: true, user: userData };
     }
-    return { success: false, error: 'Invalid credentials. Try: yasas@pickup.lk / chamara@shop.lk / admin@pickup.lk / saman@gmail.com (password: 123)' };
+    return result;
+  };
+
+  const register = async (payload) => {
+    const result = await api.register(payload);
+    if (result.success) {
+      const userData = { ...result.user };
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+      return { success: true, user: userData };
+    }
+    return result;
   };
 
   const logout = () => {
@@ -38,17 +49,55 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
   };
 
-  const updateProfile = (updates) => {
-    const updatedUser = { ...user, ...updates };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+  const updateProfile = async (updates) => {
+    if (!user) return { success: false };
+
+    const normalizedUpdates = {
+      ...updates,
+      addresses: Array.isArray(updates.addresses)
+        ? updates.addresses
+        : (updates.addresses || '')
+            .split(',')
+            .map(address => address.trim())
+            .filter(Boolean)
+    };
+
+    const result = await api.updateProfile(user.id, normalizedUpdates);
+    if (result.success) {
+      setUser(result.user);
+      localStorage.setItem('user', JSON.stringify(result.user));
+    }
+    return result;
+  };
+
+  const requestSellerAccess = async (payload) => {
+    if (!user) return { success: false };
+    const result = await api.createSellerRequest(payload, user.id);
+    if (result.success) {
+      setUser(result.user);
+      localStorage.setItem('user', JSON.stringify(result.user));
+    }
+    return result;
+  };
+
+  const refreshUser = async () => {
+    if (!user?.id) return null;
+    const freshUser = await api.getUserById(user.id);
+    if (freshUser) {
+      setUser(freshUser);
+      localStorage.setItem('user', JSON.stringify(freshUser));
+    }
+    return freshUser;
   };
 
   const value = {
     user,
     login,
+    register,
     logout,
     updateProfile,
+    requestSellerAccess,
+    refreshUser,
     isAuthenticated: !!user,
     role: user?.role,
     loading

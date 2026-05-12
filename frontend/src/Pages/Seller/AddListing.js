@@ -1,222 +1,253 @@
 import React, { useState } from 'react';
-import { Plus, Image, Tag, Calendar, DollarSign, Package, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import Button from '../../Components/Button';
 import Input from '../../Components/Input';
 import { useAuth } from '../../Hooks/useAuth';
 import { api } from '../../Services/api';
 import Modal from '../../Components/Modal';
+import { formatLKR } from '../../Utils/formatters';
 
 const AddListing = () => {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [createdListing, setCreatedListing] = useState(null);
+  const [error, setError] = useState('');
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: '',
+    imageUrl: '',
     type: 'FIXED',
     price: '',
-    stock: '',
+    stock: '1',
     startPrice: '',
     reservePrice: '',
     endDate: '',
     increment: '1000',
-    images: [],
   });
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   if (!user || user.role !== 'SELLER') {
-    return <div className="p-8 text-center">Login as seller to add listings.</div>;
+    return (
+      <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">
+        Access Denied: Sellers Only
+      </div>
+    );
   }
 
-  const handleNext = () => setStep(step + 1);
-  const handlePrev = () => setStep(step - 1);
+  // ✅ STRONG VALIDATION
+  const validateStep = () => {
+    if (step === 1) {
+      if (
+        !formData.title.trim() ||
+        !formData.description.trim() ||
+        !formData.category.trim() ||
+        !formData.imageUrl.trim()
+      ) {
+        setError('Please complete all basic details.');
+        return false;
+      }
+    }
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    await api.createListing(formData, user.id);
-    setShowSuccess(true);
-    setLoading(false);
+    if (step === 2) {
+      if (formData.type === 'FIXED') {
+        if (!formData.price || Number(formData.price) <= 0) {
+          setError('Enter a valid price.');
+          return false;
+        }
+        if (!formData.stock || Number(formData.stock) <= 0) {
+          setError('Enter valid stock quantity.');
+          return false;
+        }
+      } else {
+        if (!formData.startPrice || Number(formData.startPrice) <= 0) {
+          setError('Enter a valid starting bid.');
+          return false;
+        }
+      }
+    }
+
+    if (step === 3 && formData.type === 'AUCTION') {
+      if (!formData.endDate) {
+        setError('Select auction end date.');
+        return false;
+      }
+      if (!formData.increment || Number(formData.increment) <= 0) {
+        setError('Enter valid increment.');
+        return false;
+      }
+    }
+
+    setError('');
+    return true;
   };
 
-  const steps = ['Basic Info', 'Pricing & Stock', 'Auction Settings', 'Review'];
+  const handleNext = () => {
+    if (!validateStep()) return;
+
+    // ✅ Skip step 3 if FIXED
+    if (step === 2 && formData.type === 'FIXED') {
+      setStep(4);
+    } else {
+      setStep(prev => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (step === 4 && formData.type === 'FIXED') {
+      setStep(2);
+    } else {
+      setStep(prev => prev - 1);
+    }
+  };
+
+  // ✅ BACKEND DATA FIX
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
+
+    const backendData = {
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      category: formData.category.trim(),
+      images: [formData.imageUrl.trim()],
+      type: formData.type,
+
+      price: formData.type === 'FIXED' ? Number(formData.price) : null,
+      stock: formData.type === 'FIXED' ? Number(formData.stock) : null,
+
+      startPrice: formData.type === 'AUCTION' ? Number(formData.startPrice) : null,
+      currentBid: formData.type === 'AUCTION' ? Number(formData.startPrice) : null,
+      reservePrice: formData.reservePrice ? Number(formData.reservePrice) : null,
+      increment: formData.type === 'AUCTION' ? Number(formData.increment) : null,
+      endTime: formData.type === 'AUCTION' ? formData.endDate : null,
+    };
+
+    try {
+      const result = await api.createListing(backendData, user.id);
+      setCreatedListing(result.listing);
+      setShowSuccess(true);
+    } catch (err) {
+      setError('Publishing failed. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const steps = ['Details', 'Pricing', 'Settings', 'Review'];
 
   return (
-    <div className="min-h-screen bg-[#f6f7f8] py-12">
+    <div className="min-h-screen bg-[#f6f7f8] py-12 font-display">
       <div className="max-w-2xl mx-auto px-4">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Stepper */}
-          <div className="p-6 bg-gradient-to-r from-[#1c74e9] to-blue-600 text-white">
-            <div className="flex items-center gap-4">
-              {steps.map((label, index) => (
-                <div key={index} className={`flex items-center gap-2 ${index < step ? 'text-blue-200' : 'text-white/70'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index < step ? 'bg-blue-300' : 'bg-white/20'}`}>
-                    {index + 1}
-                  </div>
-                  <span className="font-medium text-sm">{label}</span>
+
+        {/* HEADER */}
+        <div className="bg-white rounded-[3rem] shadow-2xl border overflow-hidden">
+          <div className="p-8 bg-blue-600 text-white flex justify-between">
+            {steps.map((label, i) => (
+              <div key={label} className="text-center">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold 
+                  ${step >= i + 1 ? 'bg-white text-blue-600' : 'bg-white/20 text-white/40'}`}>
+                  {i + 1}
                 </div>
-              ))}
-            </div>
+                <p className="text-xs mt-1">{label}</p>
+              </div>
+            ))}
           </div>
 
           <div className="p-8">
-            {/* Step 1: Basic Info */}
+
+            {error && <div className="mb-4 text-red-600 font-bold">{error}</div>}
+
+            {/* STEP 1 */}
             {step === 1 && (
-              <div className="space-y-6">
-                <Input
-                  label="Product Title"
-                  icon={Tag}
-                  placeholder="e.g. Sony WH-1000XM4 Wireless Headphones"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                />
-                <Input.TextArea
-                  label="Description"
-                  placeholder="Describe your product in detail..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={5}
-                />
-                <Input
-                  label="Category"
-                  placeholder="Electronics, Fashion, Home..."
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                />
-                <Button size="lg" className="w-full" onClick={handleNext}>
-                  Next - Pricing
-                </Button>
+              <div className="space-y-4">
+                <Input label="Title" value={formData.title}
+                  onChange={(e)=>setFormData({...formData,title:e.target.value})}/>
+                <Input label="Category" value={formData.category}
+                  onChange={(e)=>setFormData({...formData,category:e.target.value})}/>
+                <Input label="Image URL" value={formData.imageUrl}
+                  onChange={(e)=>setFormData({...formData,imageUrl:e.target.value})}/>
+                <Input.TextArea label="Description" value={formData.description}
+                  onChange={(e)=>setFormData({...formData,description:e.target.value})}/>
+
+                <Button onClick={handleNext}>Next</Button>
               </div>
             )}
 
-            {/* Step 2: Pricing */}
+            {/* STEP 2 */}
             {step === 2 && (
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                  <Button
-                    variant={formData.type === 'FIXED' ? 'primary' : 'secondary'}
-                    className="flex-1"
-                    onClick={() => setFormData({ ...formData, type: 'FIXED' })}
-                  >
-                    Fixed Price
-                  </Button>
-                  <Button
-                    variant={formData.type === 'AUCTION' ? 'primary' : 'secondary'}
-                    className="flex-1"
-                    onClick={() => setFormData({ ...formData, type: 'AUCTION' })}
-                  >
-                    Auction
-                  </Button>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <button onClick={()=>setFormData({...formData,type:'FIXED'})}>Fixed</button>
+                  <button onClick={()=>setFormData({...formData,type:'AUCTION'})}>Auction</button>
                 </div>
 
-                <Input
-                  label={formData.type === 'FIXED' ? 'Price (LKR)' : 'Starting Price (LKR)'}
-                  type="number"
-                  value={formData.price || formData.startPrice}
-                  onChange={(e) => {
-                    if (formData.type === 'FIXED') {
-                      setFormData({ ...formData, price: e.target.value });
-                    } else {
-                      setFormData({ ...formData, startPrice: e.target.value });
-                    }
-                  }}
-                  icon={DollarSign}
-                />
-
-                {formData.type === 'FIXED' && (
-                  <Input
-                    label="Stock Quantity"
-                    type="number"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                    icon={Package}
-                  />
+                {formData.type === 'FIXED' ? (
+                  <>
+                    <Input label="Price" type="number"
+                      value={formData.price}
+                      onChange={(e)=>setFormData({...formData,price:e.target.value})}/>
+                    <Input label="Stock" type="number"
+                      value={formData.stock}
+                      onChange={(e)=>setFormData({...formData,stock:e.target.value})}/>
+                  </>
+                ) : (
+                  <Input label="Start Price" type="number"
+                    value={formData.startPrice}
+                    onChange={(e)=>setFormData({...formData,startPrice:e.target.value})}/>
                 )}
 
-                <div className="flex gap-4">
-                  <Button variant="secondary" onClick={handlePrev} className="flex-1">
-                    Previous
-                  </Button>
-                  <Button className="flex-1" onClick={handleNext}>
-                    Next
-                  </Button>
+                <div className="flex justify-between">
+                  <Button onClick={handlePrev}>Back</Button>
+                  <Button onClick={handleNext}>Next</Button>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Auction */}
+            {/* STEP 3 (Auction only) */}
             {step === 3 && formData.type === 'AUCTION' && (
-              <div className="space-y-6">
-                <Input
-                  label="Reserve Price (optional)"
-                  type="number"
-                  placeholder="Minimum winning bid"
-                  value={formData.reservePrice}
-                  onChange={(e) => setFormData({ ...formData, reservePrice: e.target.value })}
-                />
-                <Input
-                  label="Auction End Date"
-                  type="datetime-local"
+              <div className="space-y-4">
+                <Input label="End Date" type="datetime-local"
                   value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                />
-                <Input
-                  label="Bid Increment (LKR)"
-                  type="number"
+                  onChange={(e)=>setFormData({...formData,endDate:e.target.value})}/>
+                <Input label="Increment" type="number"
                   value={formData.increment}
-                  onChange={(e) => setFormData({ ...formData, increment: e.target.value })}
-                  placeholder="1000"
-                />
-                <div className="flex gap-4">
-                  <Button variant="secondary" onClick={handlePrev} className="flex-1">
-                    Previous
-                  </Button>
-                  <Button className="flex-1" onClick={handleNext}>
-                    Review
-                  </Button>
+                  onChange={(e)=>setFormData({...formData,increment:e.target.value})}/>
+                <Input label="Reserve Price"
+                  value={formData.reservePrice}
+                  onChange={(e)=>setFormData({...formData,reservePrice:e.target.value})}/>
+
+                <div className="flex justify-between">
+                  <Button onClick={handlePrev}>Back</Button>
+                  <Button onClick={handleNext}>Review</Button>
                 </div>
               </div>
             )}
 
-            {/* Step 4: Review */}
+            {/* STEP 4 */}
             {step === 4 && (
-              <div className="space-y-6">
-                <div className="bg-slate-50 p-6 rounded-xl">
-                  <h3 className="font-bold text-lg mb-4">Listing Summary</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>Title:</div>
-                    <div className="font-medium">{formData.title}</div>
-                    <div>Type:</div>
-                    <div>{formData.type}</div>
-                    <div>Category:</div>
-                    <div>{formData.category}</div>
-                    <div>Price:</div>
-                    <div>LKR {formData.price || formData.startPrice}</div>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <Button variant="secondary" onClick={handlePrev} className="flex-1">
-                    Edit
-                  </Button>
-                  <Button onClick={handleSubmit} size="lg" className="flex-1" loading={loading}>
-                    <Plus size={20} className="mr-2" />
-                    Publish Listing
-                  </Button>
+              <div>
+                <h2 className="font-bold">{formData.title}</h2>
+                <p>{formatLKR(formData.price || formData.startPrice)}</p>
+
+                <div className="flex gap-4 mt-4">
+                  <Button onClick={handlePrev}>Edit</Button>
+                  <Button onClick={handleSubmit} loading={loading}>Publish</Button>
                 </div>
               </div>
             )}
+
           </div>
         </div>
       </div>
 
-      <Modal isOpen={showSuccess} onClose={() => setShowSuccess(false)} title="Listing Published!">
-        <div className="text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
-          <h3 className="text-xl font-bold mb-4">Your listing is live!</h3>
-          <p className="text-slate-600 mb-8">Buyers can now see and purchase your product.</p>
-          <Button className="w-full" to="/seller/manage-listings">
-            View My Listings
-          </Button>
+      {/* SUCCESS MODAL */}
+      <Modal isOpen={showSuccess} onClose={()=>setShowSuccess(false)} title="Success">
+        <div className="text-center py-6">
+          <CheckCircle size={48} className="mx-auto mb-4 text-green-500"/>
+          <p className="font-bold">Listing Created Successfully</p>
         </div>
       </Modal>
     </div>

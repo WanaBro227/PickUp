@@ -1,6 +1,18 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
-const Button = ({ children, variant = 'primary', size = 'md', className = '', onClick, disabled, type = 'button' }) => {
+const Button = ({
+  children,
+  variant = 'primary',
+  size = 'md',
+  className = '',
+  onClick,
+  disabled,
+  type = 'button',
+  as,
+  to,
+  loading = false
+}) => {
   const base = 'font-bold rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center';
   
   const variants = {
@@ -17,11 +29,25 @@ const Button = ({ children, variant = 'primary', size = 'md', className = '', on
     lg: 'px-6 py-3 text-base'
   };
 
+  const classes = `${base} ${variants[variant]} ${sizes[size]} ${className}`;
+
+  if (as === Link || to) {
+    return (
+      <Link
+        className={classes}
+        onClick={onClick}
+        to={to}
+      >
+        {children}
+      </Link>
+    );
+  }
+
   return (
     <button
-      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={classes}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
       type={type}
     >
       {children}

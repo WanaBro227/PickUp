@@ -1,34 +1,48 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, Search, AlertTriangle, Hammer, Zap, UserCheck, UserX, BarChart3, DollarSign } from 'lucide-react';
-import { mockSellerRequests as initialRequests, mockPlatformStats, mockDisputes as initialDisputes } from '../../Utils/mockData';
 import { formatLKR } from '../../Utils/formatters';
 import Button from '../../Components/Button';
 import Input from '../../Components/Input';
+import { api } from '../../Services/api';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Using local state so the UI updates when you approve/deny during your demo
-  const [requests, setRequests] = useState(initialRequests);
-  const [disputes, setDisputes] = useState(initialDisputes);
+  const [requests, setRequests] = useState([]);
+  const [disputes, setDisputes] = useState([]);
+  const [stats, setStats] = useState({ totalUsers: 0, totalRevenue: 0, activeAuctions: 0 });
 
-  const approveSeller = (userId) => {
-    console.log('Approved seller:', userId);
+  useEffect(() => {
+    const loadAdminData = async () => {
+      const [loadedRequests, loadedStats, loadedDisputes] = await Promise.all([
+        api.getSellerRequests(),
+        api.getPlatformStats(),
+        api.getDisputes()
+      ]);
+
+      setRequests(loadedRequests);
+      setStats(loadedStats);
+      setDisputes(loadedDisputes);
+    };
+
+    loadAdminData();
+  }, []);
+
+  const approveSeller = async (userId) => {
+    await api.approveSeller(userId);
     setRequests(prev => prev.filter(req => req.userId !== userId));
   };
 
-  const denySeller = (userId) => {
-    console.log('Denied seller:', userId);
+  const denySeller = async (userId) => {
+    await api.denySeller(userId);
     setRequests(prev => prev.filter(req => req.userId !== userId));
   };
 
-  const resolveDispute = (disputeId) => {
-    console.log('Resolved dispute:', disputeId);
+  const resolveDispute = async (disputeId) => {
+    await api.resolveDispute(disputeId);
     setDisputes(prev => prev.filter(d => d.id !== disputeId));
   };
 
-  // FIXED: Added optional chaining (?.) and fallback (|| "") to prevent crash if data is missing
   const filteredRequests = requests.filter(req => 
     (req?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     (req?.businessName || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -72,7 +86,7 @@ const AdminDashboard = () => {
               <div className="p-3 bg-blue-50 rounded-xl"><Users size={24} /></div>
               <div>
                 <p className="text-sm font-medium text-slate-500">Total Users</p>
-                <p className="text-4xl font-black text-slate-900">{mockPlatformStats.totalUsers}</p>
+                <p className="text-4xl font-black text-slate-900">{stats.totalUsers}</p>
               </div>
             </div>
           </div>
@@ -81,7 +95,7 @@ const AdminDashboard = () => {
               <div className="p-3 bg-emerald-50 rounded-xl"><DollarSign size={24} /></div>
               <div>
                 <p className="text-sm font-medium text-slate-500">Platform Revenue</p>
-                <p className="text-4xl font-black text-slate-900">{formatLKR(mockPlatformStats.totalRevenue)}</p>
+                <p className="text-4xl font-black text-slate-900">{formatLKR(stats.totalRevenue)}</p>
               </div>
             </div>
           </div>
@@ -90,7 +104,7 @@ const AdminDashboard = () => {
               <div className="p-3 bg-amber-50 rounded-xl"><Zap size={24} /></div>
               <div>
                 <p className="text-sm font-medium text-slate-500">Active Auctions</p>
-                <p className="text-4xl font-black text-slate-900">{mockPlatformStats.activeAuctions}</p>
+                <p className="text-4xl font-black text-slate-900">{stats.activeAuctions}</p>
               </div>
             </div>
           </div>
