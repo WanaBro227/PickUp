@@ -27,18 +27,30 @@ export const CartProvider = ({ children }) => {
   }, [cartItems]);
 
   const addToCart = useCallback((productId, quantity = 1) => {
+  try {
     setCartItems(prev => {
-      const existing = prev.find(item => item.productId === productId);
+      const existing = prev.find(
+        item => item.productId === productId
+      );
+
       if (existing) {
-        return prev.map(item => 
-          item.productId === productId 
-            ? { ...item, quantity: item.quantity + quantity }
+        return prev.map(item =>
+          item.productId === productId
+            ? {
+                ...item,
+                quantity: item.quantity + quantity,
+              }
             : item
         );
       }
+
       return [...prev, { productId, quantity }];
     });
-  }, []);
+
+  } catch (error) {
+    console.error("Error adding item to cart:", error);
+  }
+}, []);
 
   const updateQuantity = useCallback((productId, quantity) => {
     if (quantity <= 0) {
